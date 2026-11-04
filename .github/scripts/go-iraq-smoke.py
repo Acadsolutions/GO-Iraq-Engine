@@ -107,6 +107,12 @@ for name, origin, goal in [
     # represented as a maneuver, not inferred from an old forward instruction.
     maneuvers = reverse['trip']['legs'][0].get('maneuvers', [])
     early_turn = any(m.get('type') in (12, 13) and distance(reverse_points[0], reverse_points[m['begin_shape_index']]) < 50 for m in maneuvers if 0 <= m.get('begin_shape_index', -1) < len(reverse_points))
+    if not (angle <= 115 or early_turn):
+        print(json.dumps({'failure_region': name, 'public_fixture_origin': points[middle],
+            'requested_heading': reverse_heading, 'departure_angle': angle,
+            'response_locations': reverse['trip'].get('locations'),
+            'initial_points': reverse_points[:8], 'initial_maneuvers': maneuvers[:4],
+            'alternates': [a['trip']['legs'][0].get('maneuvers', [])[:3] for a in reverse.get('alternates', [])]}, ensure_ascii=False), flush=True)
     assert angle <= 115 or early_turn, (name, 'reverse request produced opposing geometry', angle)
     warm = [route(origin, goal)[1] for _ in range(5)]
     reports.append({'region': name, 'choices': 1 + len(response.get('alternates', [])), 'cold_ms': cold,

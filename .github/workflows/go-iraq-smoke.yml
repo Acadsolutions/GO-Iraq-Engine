@@ -1,11 +1,14 @@
 name: GO Iraq isolated routing acceptance
 on:
+  push:
+    branches: [master]
+    paths: ['.github/scripts/go-iraq-smoke.py', '.github/workflows/go-iraq-smoke.yml']
   workflow_dispatch:
     inputs:
       image_revision:
         description: Full source commit of the built engine image
         required: true
-        default: 9e69f32df0757c31761067f5a3e7a51e06ed89c6
+        default: c06733089a48efb78b41e14cbc4c8b9df744e9f8
   workflow_run:
     workflows: ['GO Iraq engine']
     types: [completed]
@@ -14,7 +17,7 @@ permissions:
   packages: read
 jobs:
   smoke:
-    if: github.repository == 'Acadsolutions/GO-Iraq-Engine' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    if: github.repository == 'Acadsolutions/GO-Iraq-Engine' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -24,7 +27,7 @@ jobs:
       - name: Verify isolated engine under the proposed service limits
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_REVISION: ${{ inputs.image_revision || github.event.workflow_run.head_sha }}
+          IMAGE_REVISION: ${{ inputs.image_revision || github.event.workflow_run.head_sha || 'c06733089a48efb78b41e14cbc4c8b9df744e9f8' }}
         run: |
           set -euo pipefail
           [[ "$IMAGE_REVISION" =~ ^[0-9a-f]{40}$ ]]
