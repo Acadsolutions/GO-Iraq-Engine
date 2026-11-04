@@ -1,0 +1,38 @@
+name: GO Iraq isolated routing acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      image_revision:
+        description: Full source commit of the built engine image
+        required: true
+        default: 9e69f32df0757c31761067f5a3e7a51e06ed89c6
+  workflow_run:
+    workflows: ['GO Iraq engine']
+    types: [completed]
+permissions:
+  contents: read
+  packages: read
+jobs:
+  smoke:
+    if: github.repository == 'Acadsolutions/GO-Iraq-Engine' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify isolated engine under the proposed service limits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_REVISION: ${{ inputs.image_revision || github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u Acadsolutions --password-stdin
+          image="ghcr.io/acadsolutions/go-iraq-engine:$IMAGE_REVISION"
+          docker pull "$image"
+          key="$(openssl rand -hex 32)"
+          echo "::add-mask::$key"
+          docker run --name go-iraq-test --network none --memory 1g --cpus 1 -e GO_ROUTING_KEY="$key" -d "$image"
+          trap 'docker stats --no-stream go-iraq-test || true; docker rm -f go-iraq-test >/dev/null' EXIT
+          docker exec -i -e GO_ROUTING_KEY="$key" go-iraq-test python3 - < .github/scripts/go-iraq-smoke.py | tee /tmp/go-iraq-smoke-result.json

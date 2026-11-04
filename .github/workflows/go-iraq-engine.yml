@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
+    paths: ['src/**', 'test/**', 'valhalla/**', 'docker/**', 'go-iraq/**', 'cmake/**', 'CMakeLists.txt']
 permissions:
   contents: read
   packages: write
