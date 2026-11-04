@@ -10,6 +10,20 @@ UPSTREAM = "http://127.0.0.1:8002"
 MAX_BODY = 262144
 MAX_REPLY = 4000000
 
+def authenticated(value):
+    return bool(KEY) and hmac.compare_digest(value.encode('utf-8'), ('Bearer ' + KEY).encode('utf-8'))
+
+def validated_payload(payload, route=False):
+    if not isinstance(payload, dict): raise ValueError()
+    if route:
+        count = payload.get('alternates', 3)
+        locations = payload.get('locations')
+        if type(count) is not int or count < 0 or count > 3: raise ValueError()
+        if not isinstance(locations, list) or not 2 <= len(locations) <= 6: raise ValueError()
+        payload = dict(payload)
+        payload['alternates'] = 0 if len(locations) > 2 else count
+    return payload
+
 def route_choices(payload):
     """Keep at most four actual, distinct road geometries; never synthesize routes."""
     if not isinstance(payload, dict) or "trip" not in payload:
@@ -52,19 +66,14 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError, URLError):
             self.reply(503, b'{"ready":false}')
     def do_POST(self):
-        if not KEY or not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + KEY):
+        if not authenticated(self.headers.get("Authorization", "")):
             return self.reply(401, b'{"error":"unauthorized"}')
         if self.path not in ("/route", "/sources_to_targets"):
             return self.reply(404, b'{"error":"not_found"}')
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if size < 2 or size > MAX_BODY or self.headers.get("Transfer-Encoding"): raise ValueError()
-            payload = json.loads(self.rfile.read(size))
-            if not isinstance(payload, dict): raise ValueError()
-            if self.path == "/route":
-                count = payload.get("alternates", 3)
-                if type(count) is not int or count < 0 or count > 3: raise ValueError()
-                payload["alternates"] = 0 if len(payload.get("locations", [])) > 2 else count
+            payload = validated_payload(json.loads(self.rfile.read(size)), route=self.path == '/route')
             body = json.dumps(payload).encode()
         except (ValueError, OSError):
             return self.reply(400, b'{"error":"invalid_request"}')
@@ -94,3 +103,4 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if len(KEY) < 32: raise SystemExit("GO_ROUTING_KEY must be configured")
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8080"))), Handler).serve_forever()
+

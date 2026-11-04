@@ -48,7 +48,7 @@ ARG VERSION_MODIFIER=""
 RUN cmake -B build -DCMAKE_BUILD_TYPE=${BUILD_TYPE-"Release"} -DCMAKE_C_COMPILER=gcc -DENABLE_TESTS=On \
   -DENABLE_SINGLE_FILES_WERROR=Off -DVALHALLA_VERSION_MODIFIER=${VERSION_MODIFIER} -DINSTALL_TEST_LIB=${INSTALL_TEST_LIB:-"Off"} && \
   make -C build all alternates ${ADDITIONAL_TARGETS} -j${CONCURRENCY:-$(nproc)} && \
-  ./build/test/alternates && \
+  (cd build && ./test/alternates) && \
   make -C build install
 
 # we wont leave the source around but we'll drop the commit hash and we'll also keep the locales
@@ -95,3 +95,4 @@ RUN cat /usr/local/src/valhalla_locales | xargs -d '\n' -n1 locale-gen
 
 # python smoke test
 RUN python3 -c "import valhalla, sys; print(sys.version, valhalla)"
+
