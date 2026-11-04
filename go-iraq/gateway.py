@@ -1,8 +1,9 @@
 """Small authenticated, bounded gateway. Never log request paths, bodies or coordinates."""
-import hmac, json, os, socket, threading, time
+import hmac, json, math, os, socket, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from direction import directional_choices, DirectionUnavailable
 
 KEY = os.environ.get("GO_ROUTING_KEY", "")
 SLOTS = threading.BoundedSemaphore(2)
@@ -20,6 +21,12 @@ def validated_payload(payload, route=False):
         locations = payload.get('locations')
         if type(count) is not int or count < 0 or count > 3: raise ValueError()
         if not isinstance(locations, list) or not 2 <= len(locations) <= 6: raise ValueError()
+        if not isinstance(locations[0], dict): raise ValueError()
+        if 'heading' in locations[0]:
+            start = locations[0]
+            for key, lower, upper in [('lat', -90, 90), ('lon', -180, 180), ('heading', 0, 360)]:
+                value = start.get(key)
+                if type(value) not in (int, float) or not math.isfinite(value) or not lower <= value <= upper: raise ValueError()
         payload = dict(payload)
         payload['alternates'] = 0 if len(locations) > 2 else count
     return payload
@@ -87,9 +94,12 @@ class Handler(BaseHTTPRequestHandler):
                 data = response.read(MAX_REPLY + 1)
             if len(data) > MAX_REPLY: raise ValueError()
             result = json.loads(data)
-            if self.path == "/route": result = route_choices(result)
+            if self.path == "/route": result = directional_choices(payload, route_choices(result))
             status = 200
             self.reply(status, json.dumps(result).encode())
+        except DirectionUnavailable:
+            status = 422
+            self.reply(status, b'{"error":"direction_unavailable","retry_with_fresh_location":true}')
         except HTTPError as error:
             status = error.code if 400 <= error.code < 600 else 502
             self.reply(status, error.read(MAX_REPLY))

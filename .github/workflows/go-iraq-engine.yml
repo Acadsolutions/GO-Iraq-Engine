@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
-    paths: ['src/**', 'test/**', 'valhalla/**', 'docker/**', 'go-iraq/**', 'cmake/**', 'CMakeLists.txt']
+    paths: ['src/**', 'test/**', 'valhalla/**', 'docker/**', 'go-iraq/**', 'cmake/**', 'CMakeLists.txt', '!go-iraq/gateway.py', '!go-iraq/direction.py', '!go-iraq/test_gateway.py', '!go-iraq/Dockerfile.gateway']
 permissions:
   contents: read
   packages: write

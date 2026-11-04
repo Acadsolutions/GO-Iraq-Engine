@@ -1,0 +1,26 @@
+name: GO Iraq gateway update
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['go-iraq/gateway.py', 'go-iraq/direction.py', 'go-iraq/test_gateway.py', 'go-iraq/Dockerfile.gateway']
+permissions:
+  contents: read
+  packages: write
+jobs:
+  gateway:
+    if: github.repository == 'Acadsolutions/GO-Iraq-Engine'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build validated gateway on the immutable native engine and maps
+        run: docker build -f go-iraq/Dockerfile.gateway -t ghcr.io/acadsolutions/go-iraq-engine:${{ github.sha }} .
+      - name: Publish immutable test image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u Acadsolutions --password-stdin
+          docker push ghcr.io/acadsolutions/go-iraq-engine:${{ github.sha }}

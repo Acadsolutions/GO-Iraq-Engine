@@ -1,0 +1,7 @@
+# Reuse the verified native build and road data; rebuild only the service layer.
+FROM ghcr.io/acadsolutions/go-iraq-engine@sha256:82abc9b9c240adbc1f898e6271140d7c1f2e2729b01b58fdcdaf5b629c9d82a0
+USER root
+COPY go-iraq/gateway.py go-iraq/direction.py go-iraq/test_gateway.py /opt/go-iraq/
+RUN python3 -m unittest discover -s /opt/go-iraq -p 'test_*.py'
+LABEL org.opencontainers.image.title="GO Iraq Engine"
+LABEL org.opencontainers.image.description="GO Iraq managed routing with validated departure direction and actual route alternatives"

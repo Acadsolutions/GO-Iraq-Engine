@@ -99,6 +99,22 @@ for name, origin, goal in [
     response, cold = route(origin, goal)
     points = decode(response['trip']['legs'][0]['shape'])
     middle = max(1, min(len(points) - 2, len(points) // 2))
+    incompatible_heading = bearing(points[middle], points[middle - 1])
+    fallback_status, fallback = call('/route', {'locations': [
+        {'lat': points[middle][0], 'lon': points[middle][1], 'heading': round(incompatible_heading) % 360, 'heading_tolerance': 60},
+        {'lat': goal[0], 'lon': goal[1]}], 'costing': 'auto', 'alternates': 3})
+    if fallback_status == 422:
+        assert fallback.get('error') == 'direction_unavailable' and fallback.get('retry_with_fresh_location') is True
+    else:
+        assert fallback_status == 200, (fallback_status, fallback)
+        candidate = fallback['trip']['legs'][0]
+        candidate_points = decode(candidate['shape'])
+        candidate_ahead = next((p for p in candidate_points[1:] if distance(candidate_points[0], p) >= 10), candidate_points[-1])
+        candidate_angle = abs((bearing(candidate_points[0], candidate_ahead) - incompatible_heading + 540) % 360 - 180)
+        candidate_first = next((m for m in candidate.get('maneuvers', []) if m.get('type') not in (1, 2, 3)), {})
+        candidate_index = candidate_first.get('begin_shape_index', -1)
+        candidate_turn = candidate_first.get('type') in (12, 13) and 0 <= candidate_index < len(candidate_points) and distance(points[middle], candidate_points[0]) <= 12 and distance(points[middle], candidate_points[candidate_index]) <= 12
+        assert candidate_angle <= 115 or candidate_turn, (name, 'silent opposing fallback was published', candidate_angle)
     # Obtain a legal return path, rather than reversing on a one-way carriageway.
     returning, _ = route(goal, origin)
     back_points = decode(returning['trip']['legs'][0]['shape'])
@@ -112,7 +128,9 @@ for name, origin, goal in [
     # A provider may explicitly choose a nearby legal turn-around. It must be
     # represented as a maneuver, not inferred from an old forward instruction.
     maneuvers = reverse['trip']['legs'][0].get('maneuvers', [])
-    early_turn = any(m.get('type') in (12, 13) and distance(reverse_points[0], reverse_points[m['begin_shape_index']]) < 50 for m in maneuvers if 0 <= m.get('begin_shape_index', -1) < len(reverse_points))
+    first_turn = next((m for m in maneuvers if m.get('type') not in (1, 2, 3)), {})
+    turn_index = first_turn.get('begin_shape_index', -1)
+    early_turn = first_turn.get('type') in (12, 13) and 0 <= turn_index < len(reverse_points) and distance(reverse_origin, reverse_points[0]) <= 12 and distance(reverse_origin, reverse_points[turn_index]) <= 12
     if not (angle <= 115 or early_turn):
         print(json.dumps({'failure_region': name, 'public_fixture_origin': points[middle],
             'requested_heading': reverse_heading, 'departure_angle': angle,
@@ -124,7 +142,7 @@ for name, origin, goal in [
     reports.append({'region': name, 'choices': 1 + len(response.get('alternates', [])), 'cold_ms': cold,
                     'reverse_ms': reroute_ms, 'warm_median_ms': statistics.median(warm),
                     'warm_max_ms': max(warm), 'reverse_departure_error_degrees': round(angle, 1),
-                    'destination_preserved': True})
+                    'destination_preserved': True, 'opposing_fallback_status': fallback_status})
 print(json.dumps({'environment': 'GitHub CI, 1 CPU / 1 GiB, container loopback only',
                   'physical_device': 'not_run', 'routing': reports}, indent=2))
 assert not failures, failures
