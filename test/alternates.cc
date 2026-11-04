@@ -1,3 +1,4 @@
+#include "thor/alternates.h"
 #include "baldr/rapidjson_utils.h"
 #include "loki/worker.h"
 #include "odin/worker.h"
@@ -79,4 +80,10 @@ TEST(Alternates, test_one_alternate) {
 
 TEST(Alternates, test_two_alternates) {
   test_alternates(2);
+}
+
+TEST(GoIraqAlternates, EmptyConnectionsAreValid) {
+  std::vector<CandidateConnection> connections;
+  filter_alternates_by_stretch(connections);
+  EXPECT_TRUE(connections.empty());
 }

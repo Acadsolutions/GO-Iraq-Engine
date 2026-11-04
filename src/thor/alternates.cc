@@ -14,11 +14,11 @@ using namespace valhalla::midgard;
  */
 namespace {
 // Defaults thresholds
-float kAtMostLonger = 1.25f; // stretch threshold
+constexpr float kAtMostLonger = 1.25f; // stretch threshold
 // Alternative route shouldn't contain unreasonable detours. We should skip an alternative
 // if it has a detour longer than 2 x cost of the corresponding path in the optimal route.
-float kAtMostLongerDetour = 2.f;
-float kAtMostShared = 0.75f; // sharing threshold
+constexpr float kAtMostLongerDetour = 2.f;
+constexpr float kAtMostShared = 0.75f; // sharing threshold
 // float kAtLeastOptimal = 0.2f; // local optimality threshold
 } // namespace
 
@@ -68,6 +68,9 @@ double get_at_most_longer(double optimal_cost) {
 // candidate connections that are much more costly than the optimal cost. Culls
 // the list of connections to only those within the stretch tolerance
 void filter_alternates_by_stretch(std::vector<CandidateConnection>& connections) {
+  // A disconnected or fully filtered search has no minimum cost to inspect.
+  if (connections.empty())
+    return;
   std::sort(connections.begin(), connections.end());
   const float at_most_longer = get_at_most_longer(connections.front().cost);
   auto max_cost = connections.front().cost * at_most_longer;
@@ -163,6 +166,7 @@ bool validate_alternate_by_sharing(std::vector<std::unordered_set<GraphId>>& sha
     // have already been recovered.
     auto& shared = shared_edgeids[i];
     if (shared.empty()) {
+      shared.reserve(paths[i].size());
       for (const auto& pi : paths[i])
         shared.insert(pi.edgeid);
     }

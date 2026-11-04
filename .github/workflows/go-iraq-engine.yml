@@ -1,0 +1,28 @@
+name: GO Iraq engine
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+permissions:
+  contents: read
+  packages: write
+jobs:
+  engine:
+    if: github.repository == 'Acadsolutions/GO-Iraq-Engine'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Build modified core and run native alternate tests
+        run: docker build --build-arg CONCURRENCY=2 --build-arg VERSION_MODIFIER=go-iraq-${{ github.sha }} -f docker/Dockerfile -t go-iraq-base .
+      - name: Build road data and authenticated serving image
+        run: docker build --build-arg BASE_IMAGE=go-iraq-base -f go-iraq/Dockerfile -t ghcr.io/acadsolutions/go-iraq-engine:${{ github.sha }} .
+      - name: Publish immutable test image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u Acadsolutions --password-stdin
+          docker push ghcr.io/acadsolutions/go-iraq-engine:${{ github.sha }}

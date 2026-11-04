@@ -34,6 +34,7 @@ COPY test/gurka/gurka.cc test/gurka/
 COPY test/tile_server.h test/
 COPY test/tile_server.cc test/
 COPY test/CMakeLists.txt test/
+COPY test/ test/
 
 ARG CONCURRENCY
 ARG ADDITIONAL_TARGETS
@@ -44,9 +45,10 @@ ARG BUILD_TYPE
 ARG VERSION_MODIFIER=""
 
 # switch back to -DCMAKE_BUILD_TYPE=RelWithDebInfo and uncomment the block below if you want debug symbols
-RUN cmake -B build -DCMAKE_BUILD_TYPE=${BUILD_TYPE-"Release"} -DCMAKE_C_COMPILER=gcc -DENABLE_TESTS=Off \
+RUN cmake -B build -DCMAKE_BUILD_TYPE=${BUILD_TYPE-"Release"} -DCMAKE_C_COMPILER=gcc -DENABLE_TESTS=On \
   -DENABLE_SINGLE_FILES_WERROR=Off -DVALHALLA_VERSION_MODIFIER=${VERSION_MODIFIER} -DINSTALL_TEST_LIB=${INSTALL_TEST_LIB:-"Off"} && \
-  make -C build all ${ADDITIONAL_TARGETS} -j${CONCURRENCY:-$(nproc)} && \
+  make -C build all alternates ${ADDITIONAL_TARGETS} -j${CONCURRENCY:-$(nproc)} && \
+  ./build/test/alternates && \
   make -C build install
 
 # we wont leave the source around but we'll drop the commit hash and we'll also keep the locales
@@ -74,7 +76,7 @@ ENV LD_LIBRARY_PATH=/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-g
 
 # github packaging niceties
 LABEL org.opencontainers.image.description="Open Source Routing Engine for OpenStreetMap and Other Datasources"
-LABEL org.opencontainers.image.source="https://github.com/valhalla/valhalla"
+LABEL org.opencontainers.image.source="https://github.com/Acadsolutions/GO-Iraq-Engine"
 
 # we need to add back some runtime dependencies for binaries and scripts
 # install all the posix locales that we support
