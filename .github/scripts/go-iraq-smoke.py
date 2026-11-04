@@ -91,6 +91,7 @@ else:
 assert call('/route', {}, auth=False)[0] == 401
 assert call('/route', {'alternates': 4, 'locations': []})[0] == 400
 reports = []
+failures = []
 for name, origin, goal in [
     ('Baghdad', (33.327782, 44.408362), (33.312113, 44.363983)),
     ('Nijkerk', (52.2221112, 5.4885404), (52.2200991, 5.4870599)),
@@ -98,8 +99,13 @@ for name, origin, goal in [
     response, cold = route(origin, goal)
     points = decode(response['trip']['legs'][0]['shape'])
     middle = max(1, min(len(points) - 2, len(points) // 2))
-    reverse_heading = bearing(points[middle], points[middle - 1])
-    reverse, reroute_ms = route(points[middle], goal, reverse_heading)
+    # Obtain a legal return path, rather than reversing on a one-way carriageway.
+    returning, _ = route(goal, origin)
+    back_points = decode(returning['trip']['legs'][0]['shape'])
+    back_index = max(0, min(len(back_points) - 2, len(back_points) // 2))
+    reverse_origin = tuple((a + b) / 2 for a, b in zip(back_points[back_index], back_points[back_index + 1]))
+    reverse_heading = bearing(back_points[back_index], back_points[back_index + 1])
+    reverse, reroute_ms = route(reverse_origin, goal, reverse_heading)
     reverse_points = decode(reverse['trip']['legs'][0]['shape'])
     ahead = next((p for p in reverse_points[1:] if distance(reverse_points[0], p) >= 10), reverse_points[-1])
     angle = abs((bearing(reverse_points[0], ahead) - reverse_heading + 540) % 360 - 180)
@@ -113,7 +119,7 @@ for name, origin, goal in [
             'response_locations': reverse['trip'].get('locations'),
             'initial_points': reverse_points[:8], 'initial_maneuvers': maneuvers[:4],
             'alternates': [a['trip']['legs'][0].get('maneuvers', [])[:3] for a in reverse.get('alternates', [])]}, ensure_ascii=False), flush=True)
-    assert angle <= 115 or early_turn, (name, 'reverse request produced opposing geometry', angle)
+    if not (angle <= 115 or early_turn): failures.append((name, 'reverse request produced opposing geometry', angle))
     warm = [route(origin, goal)[1] for _ in range(5)]
     reports.append({'region': name, 'choices': 1 + len(response.get('alternates', [])), 'cold_ms': cold,
                     'reverse_ms': reroute_ms, 'warm_median_ms': statistics.median(warm),
@@ -121,3 +127,4 @@ for name, origin, goal in [
                     'destination_preserved': True})
 print(json.dumps({'environment': 'GitHub CI, 1 CPU / 1 GiB, container loopback only',
                   'physical_device': 'not_run', 'routing': reports}, indent=2))
+assert not failures, failures
