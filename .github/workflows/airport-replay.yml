@@ -1,0 +1,30 @@
+name: Controlled Baghdad airport speed profile replay
+on:
+  push:
+    branches: [qa/airport-profile-intervention-nov05]
+    paths: ['.github/workflows/airport-replay.yml', '.github/scripts/replay-profile.py']
+permissions:
+  contents: read
+  packages: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Inspect exact deployed image in network isolation
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        printf '%s' "$GH_TOKEN" | docker login ghcr.io -u Acadsolutions --password-stdin
+        image='ghcr.io/acadsolutions/go-iraq-engine@sha256:4091a372601ea8108947b2d0b9f53a87b73a1b603b747bce7fa67fd032b08326'
+        docker pull "$image"
+        curl --fail --silent --show-error --max-time 35 --output /tmp/community-profile.json https://raw.githubusercontent.com/OpenStreetMapSpeeds/schema/c9c6872d5ec656f5d290944b44eb1a103ed539fa/default_speeds.json
+        test "$(git hash-object /tmp/community-profile.json)" = '39b0aa9638cd75238d8d11c188f580a123d7dc9f'
+        docker run --name airport-audit --network none --memory 2g --cpus 2 --entrypoint sleep -d "$image" infinity
+        trap 'docker rm -f airport-audit >/dev/null' EXIT
+        docker cp /tmp/community-profile.json airport-audit:/tmp/community-profile.json
+        python3 .github/scripts/replay-profile.py
