@@ -1,6 +1,9 @@
 # Reuse the verified native build and road data; rebuild only the service layer.
-FROM ghcr.io/acadsolutions/go-iraq-engine@sha256:82abc9b9c240adbc1f898e6271140d7c1f2e2729b01b58fdcdaf5b629c9d82a0
+FROM ghcr.io/acadsolutions/go-iraq-engine@sha256:761824802ef575a1640df95ece89e440a83175f57950532d69b23a8c293576cd
 USER root
+COPY go-iraq/web/iraq.json /opt/go-iraq/web/iraq.json
+COPY go-iraq/traffic_control.py go-iraq/territory.py go-iraq/enable-traffic.py /opt/go-iraq/
+RUN command -v openssl && python3 /opt/go-iraq/enable-traffic.py
 COPY go-iraq/gateway.py go-iraq/direction.py go-iraq/test_gateway.py /opt/go-iraq/
 RUN python3 -m unittest discover -s /opt/go-iraq -p 'test_*.py'
 LABEL org.opencontainers.image.title="GO Iraq Engine"

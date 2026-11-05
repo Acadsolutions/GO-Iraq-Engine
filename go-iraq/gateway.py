@@ -3,6 +3,7 @@ import hmac, json, math, os, socket, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+import traffic_control as traffic
 from direction import directional_choices, DirectionUnavailable
 
 KEY = os.environ.get("GO_ROUTING_KEY", "")
@@ -73,14 +74,16 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError, URLError):
             self.reply(503, b'{"ready":false}')
     def do_POST(self):
-        if not authenticated(self.headers.get("Authorization", "")):
+        control = self.path in ('/traffic/segments','/traffic/route','/traffic/sync')
+        if not control and not authenticated(self.headers.get("Authorization", "")):
             return self.reply(401, b'{"error":"unauthorized"}')
-        if self.path not in ("/route", "/sources_to_targets"):
+        if not control and self.path not in ("/route", "/sources_to_targets"):
             return self.reply(404, b'{"error":"not_found"}')
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if size < 2 or size > MAX_BODY or self.headers.get("Transfer-Encoding"): raise ValueError()
-            payload = validated_payload(json.loads(self.rfile.read(size)), route=self.path == '/route')
+            if size < 2 or size > (4096 if control else MAX_BODY) or self.headers.get("Transfer-Encoding"): raise ValueError()
+            raw = self.rfile.read(size)
+            payload = validated_payload(json.loads(raw), route=self.path == '/route')
             body = json.dumps(payload).encode()
         except (ValueError, OSError):
             return self.reply(400, b'{"error":"invalid_request"}')
@@ -89,14 +92,23 @@ class Handler(BaseHTTPRequestHandler):
         started = time.monotonic()
         status = 502
         try:
-            req = Request(UPSTREAM + self.path, data=body, headers={"Content-Type":"application/json"})
-            with urlopen(req, timeout=18) as response:
-                data = response.read(MAX_REPLY + 1)
-            if len(data) > MAX_REPLY: raise ValueError()
-            result = json.loads(data)
+            if control:
+                if not traffic.ENABLED or not traffic.signed(self.path,raw,self.headers):
+                    status=403
+                    return self.reply(status,b'{"error":"invalid_control_signature"}')
+                result=traffic.console(self.path,payload)
+            else:
+                blocked=traffic.ordinary_blocks(payload) if self.path=='/route' else {}
+                if blocked:
+                    result=traffic.filtered(payload,blocked)
+                else:
+                    result=traffic.native(self.path.lstrip('/'),payload)
             if self.path == "/route": result = directional_choices(payload, route_choices(result))
             status = 200
             self.reply(status, json.dumps(result).encode())
+        except traffic.TrafficError as e:
+            status=e.status
+            self.reply(status,json.dumps({'error':e.message}).encode())
         except DirectionUnavailable:
             status = 422
             self.reply(status, b'{"error":"direction_unavailable","retry_with_fresh_location":true}')
