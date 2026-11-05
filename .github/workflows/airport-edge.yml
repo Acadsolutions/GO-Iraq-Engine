@@ -1,0 +1,28 @@
+name: Airport edge profile and fixed-path comparison
+on:
+  push:
+    branches: [qa/airport-edge-profile-nov05]
+    paths: ['.github/workflows/airport-edge.yml', '.github/scripts/airport-edge.py']
+permissions:
+  contents: read
+  packages: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Inspect exact deployed image in network isolation
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        printf '%s' "$GH_TOKEN" | docker login ghcr.io -u Acadsolutions --password-stdin
+        image='ghcr.io/acadsolutions/go-iraq-engine@sha256:4091a372601ea8108947b2d0b9f53a87b73a1b603b747bce7fa67fd032b08326'
+        docker pull "$image"
+        docker run --name airport-audit --network none --memory 1g --cpus 1 --entrypoint bash -d "$image" -c 'python3 -c '"'"'import json; c=json.load(open("/data/config.json")); c["loki"]["actions"].append("trace_attributes"); json.dump(c,open("/tmp/airport.json","w"))'"'"' && exec valhalla_service /tmp/airport.json 1'
+        trap 'docker rm -f airport-audit >/dev/null' EXIT
+        docker exec airport-audit cat /data/source-checksums.txt
+        python3 .github/scripts/airport-edge.py
