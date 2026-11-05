@@ -16,6 +16,7 @@ def start(config):
             if request("GO","status",None).get("version"): return
         except Exception: pass
         time.sleep(1)
+    command("sh","-c","cat /tmp/replay-service.log; ls -l /tmp/*json /tmp/*.tar; ps -ef | head -30")
     raise RuntimeError("local service did not start")
 def read_route_shapes():
     return [route("GO",[A,B],"mall-terminal"),route("GO",[C,D],"first-expressway")]
@@ -42,6 +43,9 @@ original,corridor=read_route_shapes()
 inspect(corridor,"before")
 command("sh","-c","kill $(cat /tmp/service.pid); mkdir -p /tmp/trial-tiles && tar xf /data/tiles.tar -C /tmp/trial-tiles")
 command("valhalla_assign_speeds","-c","/tmp/calibrated.json","-j","1")
+command("python3","-c","import json; p='/tmp/calibrated.json'; c=json.load(open(p)); c['mjolnir']['tile_extract']='/tmp/adjusted.tar'; json.dump(c,open(p,'w'))")
+command("valhalla_build_extract","-c","/tmp/calibrated.json")
+subprocess.run(["docker","restart","airport-audit"],check=True)
 start("/tmp/calibrated.json")
 OUTPUT("PHASE","open-profile")
 changed,changed_corridor=read_route_shapes()

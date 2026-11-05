@@ -1,7 +1,7 @@
 name: Controlled Baghdad airport speed profile replay
 on:
   push:
-    branches: [qa/airport-profile-intervention-nov05]
+    branches: [qa/airport-profile-replay-b-nov05]
     paths: ['.github/workflows/airport-replay.yml', '.github/scripts/replay-profile.py']
 permissions:
   contents: read
