@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends osmium-tool && 
 COPY go-iraq /opt/go-iraq
 COPY COPYING LICENSE.md /opt/go-iraq/licenses/
 ARG DATA_REVISION=2026-11-04
-RUN mkdir -p /data/tiles /downloads && python3 /opt/go-iraq/configure.py && \
+RUN mkdir -p /data/tiles /downloads && python3 /opt/go-iraq/configure.py && python3 /opt/go-iraq/install-speed-profile.py && \
     curl --fail --location --retry 3 -o /downloads/iraq.osm.pbf https://download.geofabrik.de/asia/iraq-latest.osm.pbf && \
     curl --fail --location --retry 3 -o /downloads/netherlands.osm.pbf https://download.geofabrik.de/europe/netherlands-latest.osm.pbf && \
     osmium extract -b 4.65,51.65,6.35,52.85 -s complete_ways /downloads/netherlands.osm.pbf -o /downloads/nijkerk.osm.pbf && \
@@ -19,3 +19,4 @@ RUN mkdir -p /data/tiles /downloads && python3 /opt/go-iraq/configure.py && \
     chmod +x /opt/go-iraq/start.sh && chmod -R a+rX /data /opt/go-iraq
 EXPOSE 8080
 ENTRYPOINT ["/opt/go-iraq/start.sh"]
+

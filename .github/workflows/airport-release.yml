@@ -1,0 +1,39 @@
+name: GO Iraq road speed release
+on:
+  push:
+    branches: [release/road-speeds-build57]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  release:
+    if: github.repository == 'Acadsolutions/GO-Iraq-Engine'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Test the calibrated routing image before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u Acadsolutions --password-stdin
+          image="ghcr.io/acadsolutions/go-iraq-engine:$GITHUB_SHA"
+          docker build -f go-iraq/Dockerfile.profile -t "$image" .
+          key="$(openssl rand -hex 32)"
+          echo "::add-mask::$key"
+          docker run --name engine-check --network none --memory 1g --cpus 1 -e GO_ROUTING_KEY="$key" -d "$image"
+          trap 'docker rm -f engine-check >/dev/null' EXIT
+          docker exec -i -e GO_ROUTING_KEY="$key" engine-check python3 - < .github/scripts/go-iraq-smoke.py
+          docker exec -i engine-check python3 - <<'PY'
+          import json, urllib.request
+          body={"locations":[{"lon":44.3643733,"lat":33.3119122},{"lon":44.2300198,"lat":33.2677518}],"costing":"auto"}
+          req=urllib.request.Request('http://localhost:8002/route',data=json.dumps(body).encode(),headers={'Content-Type':'application/json'})
+          trip=json.load(urllib.request.urlopen(req))['trip']
+          print('BAGHDAD AIRPORT',trip['summary']['length'],trip['summary']['time'])
+          assert 22.0 < trip['summary']['length'] < 22.3 and 1475 < trip['summary']['time'] < 1515
+          PY
+          docker push "$image"
